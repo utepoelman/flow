@@ -92,7 +92,7 @@
                     <h1 class="font-bold text-lg md:text-xl leading-tight bg-clip-text text-transparent bg-gradient-to-r from-sky-600 to-indigo-600 dark:from-sky-400 dark:to-indigo-400">
                         Going With the Flow
                     </h1>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Draw the curve, test your prediction, and see how close you get!</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Draw the curve in segments, test your prediction, and see how close you get!</p>
                 </div>
             </div>
 
@@ -630,6 +630,48 @@
 
     </main>
 
+    <!-- ================= GAME WIN CELEBRATION MODAL ================= -->
+    <div id="game-win-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-opacity duration-300">
+        <div class="glass-card max-w-md w-full p-6 rounded-3xl shadow-2xl text-center space-y-4 border border-amber-500/30 relative transform transition-all scale-100 animate-in fade-in zoom-in-95 duration-200">
+            <!-- Trophy Animation Badge -->
+            <div class="w-20 h-20 mx-auto rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 border border-amber-300/40 flex items-center justify-center text-white shadow-xl shadow-amber-500/30 animate-bounce">
+                <i class="fa-solid fa-trophy text-3xl"></i>
+            </div>
+
+            <div>
+                <h3 class="text-2xl font-extrabold text-slate-800 dark:text-slate-100">Congratulations! 🎉</h3>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    You've successfully matched all the container shapes to their rate graphs!
+                </p>
+            </div>
+
+            <!-- Match Stats Summary Box -->
+            <div class="grid grid-cols-3 gap-2 py-3 bg-slate-100/80 dark:bg-slate-900/60 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Final Score</span>
+                    <span id="win-score" class="text-lg font-bold text-sky-600 dark:text-sky-400">0</span>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Attempts</span>
+                    <span id="win-moves" class="text-lg font-bold text-indigo-600 dark:text-indigo-400">0</span>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Time</span>
+                    <span id="win-time" class="text-lg font-bold font-mono text-amber-600 dark:text-amber-400">00:00</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 pt-2">
+                <button onclick="closeWinModal()" class="flex-1 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition">
+                    Close
+                </button>
+                <button onclick="closeWinModal(); startNewGame();" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white text-xs font-bold transition shadow-lg shadow-sky-600/30 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-rotate-right"></i> Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- ================= APPLICATION JAVASCRIPT ================= -->
     <script>
@@ -648,8 +690,10 @@
         let animFrameId = null;
         let lastTimestamp = null;
 
-        // User Prediction Mechanics State
-        let userPredictionPoints = []; // [{t, h}]
+        // User Prediction Mechanics State (Supports Segmented Drawing)
+        let userPredictionPoints = [];     // Combined & sorted prediction points [{t, h}]
+        let existingPredictionPoints = []; // Stored points from completed strokes [{t, h}]
+        let currentStrokePoints = [];      // Active stroke points [{t, h}]
         let isDrawingPrediction = false;
         let predictionScore = null;
         
@@ -1309,7 +1353,7 @@
                 ctx.fillStyle = isDarkMode ? 'rgba(168, 85, 247, 0.85)' : 'rgba(147, 51, 234, 0.85)';
                 ctx.font = '500 12px Inter, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('✏️ Draw your predicted depth curve here, then click Fill Water!', width / 2, height / 2);
+                ctx.fillText('✏️ Draw your predicted depth curve in segments, then click Fill Water!', width / 2, height / 2);
                 ctx.restore();
             }
 
@@ -1407,7 +1451,7 @@
         }
 
         /* -------------------------------------------------------------------------
-         * GRAPH PREDICTION DRAWING & SCORING MECHANICS
+         * GRAPH PREDICTION DRAWING & SCORING MECHANICS (SEGMENTED DRAWING)
          * ------------------------------------------------------------------------- */
 
         function setupGraphPredictionCanvas() {
@@ -1429,22 +1473,23 @@
             function startPredict(e) {
                 if (isPlaying || simTime > 0) return; // don't allow drawing during or after simulation playback
                 isDrawingPrediction = true;
-                userPredictionPoints = [];
+                currentStrokePoints = [];
                 predictionScore = null;
                 updateScoreUI();
-                addPredictionPoint(getMousePos(e));
+                addStrokePoint(getMousePos(e));
             }
 
             function movePredict(e) {
                 if (!isDrawingPrediction) return;
-                addPredictionPoint(getMousePos(e));
+                addStrokePoint(getMousePos(e));
+                updateCombinedPrediction(false);
                 drawFrame();
             }
 
             function endPredict() {
                 if (!isDrawingPrediction) return;
                 isDrawingPrediction = false;
-                processPredictionPoints();
+                updateCombinedPrediction(true);
                 drawFrame();
             }
 
@@ -1457,7 +1502,7 @@
             window.addEventListener('touchend', endPredict);
         }
 
-        function addPredictionPoint(pos) {
+        function addStrokePoint(pos) {
             if (!currentProfile) return;
             const paddingL = 45, paddingR = 25, paddingT = 25, paddingB = 40;
             const graphW = pos.rectW - paddingL - paddingR;
@@ -1472,20 +1517,42 @@
             const t = Math.max(0, Math.min(T_max, (pos.x - paddingL) / scaleX));
             const h = Math.max(0, Math.min(H_max, (pos.rectH - paddingB - pos.y) / scaleY));
 
-            userPredictionPoints.push({ t, h });
+            currentStrokePoints.push({ t, h });
         }
 
-        function processPredictionPoints() {
-            if (userPredictionPoints.length < 2) return;
-            userPredictionPoints.sort((a, b) => a.t - b.t);
+        function updateCombinedPrediction(isFinal = false) {
+            if (currentStrokePoints.length === 0) return;
 
+            // Find time range of the active stroke
+            let tMin = Infinity, tMax = -Infinity;
+            for (let p of currentStrokePoints) {
+                if (p.t < tMin) tMin = p.t;
+                if (p.t > tMax) tMax = p.t;
+            }
+
+            // Remove existing points that overlap with the active stroke's time range
+            const nonOverlapping = existingPredictionPoints.filter(p => p.t < tMin - 0.01 || p.t > tMax + 0.01);
+
+            // Merge non-overlapping points + new stroke points
+            let combined = [...nonOverlapping, ...currentStrokePoints];
+
+            // Sort all points chronologically by time t
+            combined.sort((a, b) => a.t - b.t);
+
+            // Deduplicate extremely close time points
             const filtered = [];
-            for (let p of userPredictionPoints) {
-                if (filtered.length === 0 || p.t - filtered[filtered.length - 1].t > 0.05) {
+            for (let p of combined) {
+                if (filtered.length === 0 || p.t - filtered[filtered.length - 1].t > 0.02) {
                     filtered.push(p);
                 }
             }
+
             userPredictionPoints = filtered;
+
+            if (isFinal) {
+                existingPredictionPoints = [...userPredictionPoints];
+                currentStrokePoints = [];
+            }
         }
 
         function getPredictedHeightAt(t) {
@@ -1537,6 +1604,8 @@
         }
 
         function clearPrediction() {
+            existingPredictionPoints = [];
+            currentStrokePoints = [];
             userPredictionPoints = [];
             predictionScore = null;
             updateScoreUI();
@@ -2275,6 +2344,7 @@
 
                 if (gameMatches === gamePairsCount) {
                     if (gameTimerInterval) clearInterval(gameTimerInterval);
+                    setTimeout(showWinModal, 400); // Trigger celebration popup
                 }
             } else {
                 // MATCH FAILED
@@ -2286,6 +2356,19 @@
                 updateGameStatsUI();
                 renderGameBoard();
             }
+        }
+
+        function showWinModal() {
+            document.getElementById('win-score').innerText = gameScore;
+            document.getElementById('win-moves').innerText = gameMoves;
+            const mins = String(Math.floor(gameTimeSeconds / 60)).padStart(2, '0');
+            const secs = String(gameTimeSeconds % 60).padStart(2, '0');
+            document.getElementById('win-time').innerText = `${mins}:${secs}`;
+            document.getElementById('game-win-modal').classList.remove('hidden');
+        }
+
+        function closeWinModal() {
+            document.getElementById('game-win-modal').classList.add('hidden');
         }
 
 
