@@ -140,9 +140,13 @@
                         <option value="cone_top">Cone / Funnel (Apex at Top)</option>
                         <option value="sphere">Sphere / Spherical Flask</option>
                         <option value="parabola">Parabolic Bowl</option>
-                        <option value="stacked_narrow_wide">Stacked Cylinders (Narrow → Wide)</option>
-                        <option value="stacked_wide_narrow">Stacked Cylinders (Wide → Narrow)</option>
+                        <option value="stacked_narrow_wide">2-Layer Cylinders (Narrow → Wide)</option>
+                        <option value="stacked_wide_narrow">2-Layer Cylinders (Wide → Narrow)</option>
+                        <option value="triple_stacked_step_up">3-Layer Cylinders (Narrow → Med → Wide)</option>
+                        <option value="triple_stacked_step_down">3-Layer Cylinders (Wide → Med → Narrow)</option>
+                        <option value="triple_stacked_hourglass">3-Layer Cylinders (Wide → Narrow → Wide)</option>
                         <option value="erlenmeyer">Erlenmeyer Flask (Cone + Neck)</option>
+                        <option value="goblet">Wine Glass / Goblet (Stem + Bowl)</option>
                         <option value="vase">Vase / Hourglass (Cos Wave)</option>
                         <option value="custom" disabled id="custom-option">Custom Built Shape</option>
                     </select>
@@ -214,7 +218,7 @@
                         </div>
                         
                         <div class="flex items-center gap-2">
-                            <!-- Score Badge (hidden until filling finishes) -->
+                            <!-- Score Badge -->
                             <span id="score-badge" class="hidden px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-xs">
                                 Accuracy: 0%
                             </span>
@@ -336,7 +340,7 @@
                 <!-- Builder Content Layout -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     
-                    <!-- Left Column: Settings Panel (7 cols) -->
+                    <!-- Left Column: Settings Panel -->
                     <div class="lg:col-span-7 space-y-4">
                         
                         <!-- PANEL A: STACKED LAYERS -->
@@ -415,7 +419,7 @@
 
                     </div>
 
-                    <!-- Right Column: Builder Preview Canvas (5 cols) -->
+                    <!-- Right Column: Builder Preview Canvas -->
                     <div class="lg:col-span-5 flex flex-col items-center justify-center space-y-3">
                         <div class="w-full flex items-center justify-between">
                             <span class="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Live Profile & Graph Preview</span>
@@ -463,8 +467,8 @@
                         <!-- Difficulty -->
                         <select id="game-diff" onchange="startNewGame()" class="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-1.5 outline-none">
                             <option value="4">Easy (4 Pairs)</option>
-                            <option value="6" selected>Medium (6 Pairs)</option>
-                            <option value="8">Hard (8 Pairs)</option>
+                            <option value="8" selected>Medium (8 Pairs)</option>
+                            <option value="12">Hard (12 Pairs)</option>
                         </select>
 
                         <button onclick="startNewGame()" class="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center gap-1.5">
@@ -481,7 +485,7 @@
                     </div>
                     <div class="p-3 bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
                         <span class="text-xs text-slate-500 dark:text-slate-400 block font-medium">Matches Found</span>
-                        <span id="gstat-matches" class="text-xl font-bold text-emerald-600 dark:text-emerald-400">0 / 6</span>
+                        <span id="gstat-matches" class="text-xl font-bold text-emerald-600 dark:text-emerald-400">0 / 8</span>
                     </div>
                     <div class="p-3 bg-slate-100/80 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
                         <span class="text-xs text-slate-500 dark:text-slate-400 block font-medium">Attempts</span>
@@ -494,7 +498,7 @@
                 </div>
 
                 <!-- Game Cards Grid Container -->
-                <div id="game-board" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 min-h-[350px]">
+                <div id="game-board" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4 min-h-[350px]">
                     <!-- Dynamically populated cards -->
                 </div>
 
@@ -690,8 +694,8 @@
         let animFrameId = null;
         let lastTimestamp = null;
 
-        // User Prediction Mechanics State (Supports Segmented Drawing)
-        let userPredictionPoints = [];     // Combined & sorted prediction points [{t, h}]
+        // User Prediction Mechanics State
+        let userPredictionPoints = [];     // Combined prediction points [{t, h}]
         let existingPredictionPoints = []; // Stored points from completed strokes [{t, h}]
         let currentStrokePoints = [];      // Active stroke points [{t, h}]
         let isDrawingPrediction = false;
@@ -702,6 +706,7 @@
             cylinder: {
                 name: 'Cylinder',
                 H: 20,
+                stepHeights: [],
                 radiusFunc: (y) => 5,
                 formulaTex: 'r(y) = 5',
                 explanation: 'A cylinder has a constant radius ($r(y) = 5$). Therefore, cross-sectional area $A(h) = 25\\pi$ is constant. The rate of depth change $\\frac{dh}{dt} = \\frac{Q}{A}$ is constant, yielding a straight linear depth graph!'
@@ -709,6 +714,7 @@
             cone_bottom: {
                 name: 'Cone (Apex at Bottom)',
                 H: 20,
+                stepHeights: [],
                 radiusFunc: (y) => Math.max(0.1, 0.35 * y),
                 formulaTex: 'r(y) = 0.35 \\cdot y',
                 explanation: 'In a cone with apex at the bottom, radius $r(y)$ increases linearly with height $y$. Cross-sectional area $A(h) = \\pi (0.35 h)^2 \\propto h^2$ expands rapidly. As the container fills, $\\frac{dh}{dt} = \\frac{Q}{A(h)}$ continuously slows down, producing a concave down curve!'
@@ -716,6 +722,7 @@
             cone_top: {
                 name: 'Cone / Funnel (Apex at Top)',
                 H: 20,
+                stepHeights: [],
                 radiusFunc: (y) => Math.max(0.3, 7 - 0.3 * y),
                 formulaTex: 'r(y) = 7 - 0.3 \\cdot y',
                 explanation: 'In a funnel container, radius $r(y)$ decreases as height increases. As water level rises, cross-sectional area $A(h)$ shrinks, causing the filling speed $\\frac{dh}{dt}$ to accelerate over time (concave up graph).'
@@ -723,6 +730,7 @@
             sphere: {
                 name: 'Sphere / Spherical Flask',
                 H: 20,
+                stepHeights: [],
                 radiusFunc: (y) => {
                     const R = 10;
                     const dy = y - R;
@@ -734,27 +742,55 @@
             parabola: {
                 name: 'Parabolic Bowl',
                 H: 20,
+                stepHeights: [],
                 radiusFunc: (y) => Math.max(0.2, 1.8 * Math.sqrt(Math.max(0, y))),
                 formulaTex: 'r(y) = 1.8 \\sqrt{y}',
                 explanation: 'For a parabolic bowl $r(y) \\propto \\sqrt{y}$, the cross-sectional area $A(h) = \\pi r^2 \\propto h$ grows linearly with depth $h$. Thus $\\frac{dh}{dt} = \\frac{Q}{k h}$ is inversely proportional to $h$, causing depth to grow as a square root curve $h(t) \\propto \\sqrt{t}$.'
             },
             stacked_narrow_wide: {
-                name: 'Stacked Cylinders (Narrow → Wide)',
+                name: '2-Layer Cylinders (Narrow → Wide)',
                 H: 20,
+                stepHeights: [10],
                 radiusFunc: (y) => (y < 10) ? 3 : 7,
                 formulaTex: 'r(y) = \\begin{cases} 3 & y \\lt 10 \\\\ 7 & y \\ge 10 \\end{cases}',
                 explanation: 'Composed of two cylinders: a narrow lower section ($r=3$) and a wide upper section ($r=7$). Water fills the narrow bottom quickly (steep linear slope), then instantly transitions at $y=10$ to a much slower filling rate (gentler linear slope).'
             },
             stacked_wide_narrow: {
-                name: 'Stacked Cylinders (Wide → Narrow)',
+                name: '2-Layer Cylinders (Wide → Narrow)',
                 H: 20,
+                stepHeights: [10],
                 radiusFunc: (y) => (y < 10) ? 7 : 3,
                 formulaTex: 'r(y) = \\begin{cases} 7 & y \\lt 10 \\\\ 3 & y \\ge 10 \\end{cases}',
                 explanation: 'Water fills the wide lower section slowly with a gentle linear slope, then dramatically speeds up upon reaching the narrow upper cylinder section at $y=10$.'
             },
+            triple_stacked_step_up: {
+                name: '3-Layer Cylinders (Narrow → Med → Wide)',
+                H: 20,
+                stepHeights: [20/3, 40/3],
+                radiusFunc: (y) => (y < 20/3) ? 2.5 : ((y < 40/3) ? 5.0 : 8.0),
+                formulaTex: 'r(y) = \\begin{cases} 2.5 & y \\lt 6.7 \\\\ 5.0 & 6.7 \\le y \\lt 13.3 \\\\ 8.0 & y \\ge 13.3 \\end{cases}',
+                explanation: 'Three stacked cylinders stepping outward. Water fills the narrow bottom section fastest, slows down in the middle cylinder, and fills slowest in the wide top section, producing three linear segments with decreasing slopes.'
+            },
+            triple_stacked_step_down: {
+                name: '3-Layer Cylinders (Wide → Med → Narrow)',
+                H: 20,
+                stepHeights: [20/3, 40/3],
+                radiusFunc: (y) => (y < 20/3) ? 7.5 : ((y < 40/3) ? 5.0 : 2.5),
+                formulaTex: 'r(y) = \\begin{cases} 7.5 & y \\lt 6.7 \\\\ 5.0 & 6.7 \\le y \\lt 13.3 \\\\ 2.5 & y \\ge 13.3 \\end{cases}',
+                explanation: 'Three stacked cylinders stepping inward. Water fills the wide base slowly, accelerates in the middle section, and fills fastest in the narrow top cylinder.'
+            },
+            triple_stacked_hourglass: {
+                name: '3-Layer Cylinders (Wide → Narrow → Wide)',
+                H: 20,
+                stepHeights: [20/3, 40/3],
+                radiusFunc: (y) => (y < 20/3 || y >= 40/3) ? 7.0 : 3.0,
+                formulaTex: 'r(y) = \\begin{cases} 7.0 & y \\lt 6.7 \\text{ or } y \\ge 13.3 \\\\ 3.0 & 6.7 \\le y \\lt 13.3 \\end{cases}',
+                explanation: 'A stepped hourglass shape made of three cylindrical chambers. Fills slowly in the wide bottom, shoots up rapidly through the narrow middle neck, then slows back down in the upper chamber.'
+            },
             erlenmeyer: {
                 name: 'Erlenmeyer Flask',
                 H: 20,
+                stepHeights: [14],
                 radiusFunc: (y) => {
                     if (y <= 14) return Math.max(0.5, 7.5 - 0.35 * y); // conical base
                     return 2.6; // cylindrical neck
@@ -762,9 +798,18 @@
                 formulaTex: 'r(y) = \\begin{cases} 7.5 - 0.35y & y \\le 14 \\\\ 2.6 & y \\gt 14 \\end{cases}',
                 explanation: 'Combines a conical body that narrows upward (speeding up depth growth) with a narrow vertical neck of constant radius ($r=2.6$), which fills at a constant fast speed.'
             },
+            goblet: {
+                name: 'Wine Glass / Goblet',
+                H: 20,
+                stepHeights: [],
+                radiusFunc: (y) => (y < 8.0) ? 1.2 : (1.2 + 0.5 * Math.pow(y - 8.0, 1.1)),
+                formulaTex: 'r(y) = \\begin{cases} 1.2 & y \\lt 8 \\\\ 1.2 + 0.5(y-8)^{1.1} & y \\ge 8 \\end{cases}',
+                explanation: 'Features a narrow cylindrical stem and a flaring bowl above. Depth rises extremely rapidly through the thin stem, then dramatically decelerates as liquid fills the flaring bowl.'
+            },
             vase: {
                 name: 'Vase / Hourglass',
                 H: 20,
+                stepHeights: [],
                 radiusFunc: (y) => 4 + 2 * Math.cos((Math.PI * y) / 10),
                 formulaTex: 'r(y) = 4 + 2 \\cos\\left(\\frac{\\pi y}{10}\\right)',
                 explanation: 'An oscillating radius profile produces alternating wide and narrow sections, causing depth rate $\\frac{dh}{dt}$ to fluctuate smoothly in an undulating wave curve.'
@@ -772,62 +817,79 @@
         };
 
         let currentProfileKey = 'cylinder';
-        let currentProfile = null; // Container profile lookup instance
+        let currentProfile = null;
 
         /* -------------------------------------------------------------------------
-         * 2. NUMERICAL PROFILE ENGINE & DISK INTEGRATION (WITH STEP DETECTION)
+         * 2. NUMERICAL PROFILE ENGINE & STEP DISCONTINUITY DETECTION
          * ------------------------------------------------------------------------- */
         
-        function buildContainerProfile(radiusFunc, H = 20, numSamples = 600) {
-            const dy = H / numSamples;
+        function buildContainerProfile(radiusFunc, H = 20, stepHeights = [], numSamples = 600) {
+            let yValues = [];
+            let dy = H / numSamples;
+            for (let i = 0; i <= numSamples; i++) {
+                yValues.push(i * dy);
+            }
+            if (stepHeights && stepHeights.length > 0) {
+                stepHeights.forEach(sh => {
+                    if (sh > 0 && sh < H) {
+                        yValues.push(sh);
+                    }
+                });
+            }
+            yValues.sort((a, b) => a - b);
+
+            let cleanY = [];
+            for (let y of yValues) {
+                if (cleanY.length === 0 || Math.abs(y - cleanY[cleanY.length - 1]) > 1e-5) {
+                    cleanY.push(y);
+                }
+            }
+
             const samples = [];
             const steps = [];
             let cumVol = 0;
-
             const eps = 0.0001;
 
-            for (let i = 0; i <= numSamples; i++) {
-                const y = i * dy;
-                
-                // Detect abrupt radius step discontinuities (e.g., stacked cylinders)
-                if (i > 0 && i < numSamples) {
-                    const rBelow = radiusFunc(y - eps);
-                    const rAbove = radiusFunc(y + eps);
-                    if (Math.abs(rAbove - rBelow) > 0.1) {
-                        steps.push({ y, rBelow, rAbove });
+            for (let i = 0; i < cleanY.length; i++) {
+                const y = cleanY[i];
+                const rBelow = radiusFunc(Math.max(0, y - eps));
+                const rAbove = radiusFunc(Math.min(H, y + eps));
 
-                        // Add lower radius sample at y
-                        const areaBelow = Math.PI * rBelow * rBelow;
-                        if (samples.length > 0) {
-                            const prev = samples[samples.length - 1];
-                            const sliceDy = y - prev.y;
-                            if (sliceDy > 0) {
-                                cumVol += ((prev.area + areaBelow) / 2) * sliceDy;
-                            }
+                if (Math.abs(rAbove - rBelow) > 0.1 && y > 0 && y < H) {
+                    steps.push({ y, rBelow, rAbove });
+
+                    // Lower sample at y
+                    const areaBelow = Math.PI * rBelow * rBelow;
+                    if (samples.length > 0) {
+                        const prev = samples[samples.length - 1];
+                        const sliceDy = y - prev.y;
+                        if (sliceDy > 0) {
+                            cumVol += ((prev.area + areaBelow) / 2) * sliceDy;
                         }
-                        samples.push({ y, r: rBelow, area: areaBelow, cumVol });
                     }
-                }
+                    samples.push({ y, r: rBelow, area: areaBelow, cumVol, isStep: true, rBelow, rAbove });
 
-                let r = (i < numSamples) ? radiusFunc(y + eps) : radiusFunc(y - eps);
-                if (isNaN(r) || r < 0.1) r = 0.1;
-                const area = Math.PI * r * r;
+                    // Upper sample at y
+                    const areaAbove = Math.PI * rAbove * rAbove;
+                    samples.push({ y, r: rAbove, area: areaAbove, cumVol, isStep: true, rBelow, rAbove });
+                } else {
+                    let r = radiusFunc(y);
+                    if (isNaN(r) || r < 0.1) r = 0.1;
+                    const area = Math.PI * r * r;
 
-                if (samples.length > 0) {
-                    const prev = samples[samples.length - 1];
-                    const sliceDy = y - prev.y;
-                    if (sliceDy > 0) {
-                        cumVol += ((prev.area + area) / 2) * sliceDy;
+                    if (samples.length > 0) {
+                        const prev = samples[samples.length - 1];
+                        const sliceDy = y - prev.y;
+                        if (sliceDy > 0) {
+                            cumVol += ((prev.area + area) / 2) * sliceDy;
+                        }
                     }
+                    samples.push({ y, r, area, cumVol, isStep: false, rBelow: r, rAbove: r });
                 }
-
-                samples.push({ y, r, area, cumVol });
             }
 
             return {
                 H,
-                numSamples,
-                dy,
                 samples,
                 steps,
                 totalVolume: cumVol,
@@ -895,7 +957,39 @@
 
 
         /* -------------------------------------------------------------------------
-         * 3. APPLICATION INITIALIZATION & TAB NAVIGATION
+         * 3. 3D ELLIPSE ARC HELPER FOR CYLINDER CONNECTIONS
+         * ------------------------------------------------------------------------- */
+
+        function drawStepShelfArc(ctx, centerX, py, rFrom, rTo, scaleX, isLeftSide) {
+            const rMax = Math.max(rFrom, rTo);
+            const rxMax = rMax * scaleX;
+            const ryMax = Math.max(0.1, Math.min(8, rxMax * 0.2));
+
+            if (rxMax < 0.5 || Math.abs(rFrom - rTo) < 0.05) {
+                const targetX = centerX + (isLeftSide ? -rTo * scaleX : rTo * scaleX);
+                ctx.lineTo(targetX, py);
+                return;
+            }
+
+            const cos1 = Math.min(1.0, Math.max(-1.0, rFrom / rMax));
+            const cos2 = Math.min(1.0, Math.max(-1.0, rTo / rMax));
+            
+            if (isLeftSide) {
+                const a1 = Math.PI - Math.acos(cos1);
+                const a2 = Math.PI - Math.acos(cos2);
+                const ccw = (a1 > a2);
+                ctx.ellipse(centerX, py, rxMax, ryMax, 0, a1, a2, ccw);
+            } else {
+                const a1 = Math.acos(cos1);
+                const a2 = Math.acos(cos2);
+                const ccw = (a1 > a2);
+                ctx.ellipse(centerX, py, rxMax, ryMax, 0, a1, a2, ccw);
+            }
+        }
+
+
+        /* -------------------------------------------------------------------------
+         * 4. APPLICATION INITIALIZATION & TAB NAVIGATION
          * ------------------------------------------------------------------------- */
 
         window.onload = function() {
@@ -907,22 +1001,15 @@
                 throwOnError: false
             };
 
-            // Setup math auto-render
             if (window.renderMathInElement) {
                 renderMathInElement(document.body, katexOptions);
             }
 
-            // Initialize default preset container
             loadPreset('cylinder');
-
-            // Setup Resize Handler for Canvas DPI scaling
             window.addEventListener('resize', handleResize);
 
-            // Initialize Builder layers & Graph Prediction listeners
             initBuilder();
             setupGraphPredictionCanvas();
-
-            // Start Animation Loop
             requestAnimationFrame(animLoop);
         };
 
@@ -962,7 +1049,7 @@
 
 
         /* -------------------------------------------------------------------------
-         * 4. INTERACTIVE VISUALIZER SIMULATION & RENDERING
+         * 5. VISUALIZER CONTROLS & RENDERING
          * ------------------------------------------------------------------------- */
 
         function loadPreset(key) {
@@ -970,13 +1057,11 @@
             const preset = PRESETS[key];
             if (!preset) return;
 
-            currentProfile = buildContainerProfile(preset.radiusFunc, preset.H);
+            currentProfile = buildContainerProfile(preset.radiusFunc, preset.H, preset.stepHeights);
             
             document.getElementById('container-name-badge').innerText = preset.name;
             clearPrediction();
             resetSim();
-            
-            // Re-render math content in Maths Background
             updateMathsBackgroundUI();
         }
 
@@ -993,7 +1078,7 @@
         function toggleSimPlay() {
             const T_max = currentProfile.totalVolume / flowRate;
             if (simTime >= T_max) {
-                simTime = 0; // wrap around
+                simTime = 0;
                 predictionScore = null;
                 updateScoreUI();
             }
@@ -1054,7 +1139,7 @@
 
         function animLoop(timestamp) {
             if (!lastTimestamp) lastTimestamp = timestamp;
-            const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000); // delta time in seconds
+            const dt = Math.min(0.1, (timestamp - lastTimestamp) / 1000);
             lastTimestamp = timestamp;
 
             if (isPlaying && currentProfile) {
@@ -1066,7 +1151,6 @@
                     isPlaying = false;
                     updatePlayBtnUI();
                     
-                    // Reveal accuracy score ONLY when filling completes!
                     if (userPredictionPoints.length > 1) {
                         calculatePredictionScore();
                     }
@@ -1099,7 +1183,6 @@
             document.getElementById('stat-fill-time').innerText = T_max.toFixed(1) + ' s';
         }
 
-        /* High DPI Canvas Setup Helper */
         function getCanvasContext(canvasId) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return null;
@@ -1123,7 +1206,7 @@
         }
 
         /* -------------------------------------------------------------------------
-         * CANVAS RENDERER: CONTAINER ANIMATION
+         * CANVAS RENDERER: CONTAINER ANIMATION WITH 3D ELLIPSE CONNECTIONS
          * ------------------------------------------------------------------------- */
 
         function drawContainerCanvas() {
@@ -1154,7 +1237,7 @@
             const topRx = Math.max(0.1, topR * scaleX);
             const topRy = Math.max(0.1, Math.min(8, topRx * 0.2));
 
-            // 1. Draw Depth Ruler Grid (y-axis markings)
+            // Ruler Grid Lines
             ctx.strokeStyle = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
             ctx.lineWidth = 1;
             ctx.fillStyle = isDarkMode ? '#94a3b8' : '#64748b';
@@ -1166,21 +1249,18 @@
                 ctx.moveTo(30, py);
                 ctx.lineTo(width - 30, py);
                 ctx.stroke();
-
                 ctx.fillText(cm + ' cm', 8, py + 3);
             }
 
-            // Calculate current liquid level height
             const V_current = Math.min(currentProfile.totalVolume, flowRate * simTime);
             const h_current = currentProfile.getHeightAtVolume(V_current);
             const liquidY = bottomY - h_current * scaleY;
 
-            // 2. Draw Faucet & Streaming Water (if active and not full)
+            // Faucet Stream
             if (isPlaying || simTime > 0) {
                 const faucetX = centerX;
                 const faucetY = 15;
                 
-                // Draw Stream
                 if (h_current < H_container && liquidY > faucetY) {
                     const streamGrad = ctx.createLinearGradient(faucetX, faucetY, faucetX, Math.max(faucetY + 1, liquidY));
                     streamGrad.addColorStop(0, 'rgba(56, 189, 248, 0.9)');
@@ -1191,14 +1271,13 @@
                     ctx.fillRect(faucetX - streamWidth/2, faucetY, streamWidth, liquidY - faucetY);
                 }
 
-                // Faucet Icon/Nozzle
                 ctx.fillStyle = isDarkMode ? '#cbd5e1' : '#475569';
                 ctx.beginPath();
                 ctx.roundRect(faucetX - 12, 5, 24, 12, 4);
                 ctx.fill();
             }
 
-            // 3. Draw Water Body Inside Container (Filled Liquid)
+            // Water Liquid Fill Inside Container
             if (h_current > 0.01) {
                 ctx.beginPath();
                 const samples = currentProfile.samples;
@@ -1209,38 +1288,46 @@
                     else break;
                 }
 
-                // Left side down to bottom
+                // Trace left water boundary
                 for (let i = maxIndex; i >= 0; i--) {
                     const s = samples[i];
-                    const px = centerX - s.r * scaleX;
                     const py = bottomY - s.y * scaleY;
-                    if (i === maxIndex) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    if (i === maxIndex) {
+                        ctx.moveTo(centerX - s.r * scaleX, py);
+                    } else {
+                        if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                            drawStepShelfArc(ctx, centerX, py, samples[i-1].r, s.r, scaleX, true);
+                        } else {
+                            ctx.lineTo(centerX - s.r * scaleX, py);
+                        }
+                    }
                 }
 
-                // Bottom curved base for water
                 if (bottomR > 0.01) {
                     ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
                 }
 
-                // Right side up to surface
+                // Trace right water boundary
                 for (let i = 0; i <= maxIndex; i++) {
                     const s = samples[i];
-                    const px = centerX + s.r * scaleX;
                     const py = bottomY - s.y * scaleY;
-                    ctx.lineTo(px, py);
+                    if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                        i++;
+                    } else {
+                        ctx.lineTo(centerX + s.r * scaleX, py);
+                    }
                 }
 
                 ctx.closePath();
 
-                // Water Liquid Gradient
                 const waterGrad = ctx.createLinearGradient(centerX, bottomY, centerX, Math.min(bottomY - 1, liquidY));
                 waterGrad.addColorStop(0, 'rgba(2, 132, 199, 0.85)');
                 waterGrad.addColorStop(1, 'rgba(56, 189, 248, 0.65)');
                 ctx.fillStyle = waterGrad;
                 ctx.fill();
 
-                // Animated Surface Ripple / Wave
+                // Surface Ripple
                 const surfaceR = currentProfile.getRadiusAt(h_current);
                 const rx = Math.max(0.1, surfaceR * scaleX);
                 const ry = Math.max(0.1, Math.min(8, rx * 0.2));
@@ -1251,71 +1338,109 @@
                 ctx.fill();
             }
 
-            // 4. Draw Glass Container Background Fill
+            // Glass Fill Background
             ctx.beginPath();
-            // Left Wall (bottom to top)
-            for (let i = 0; i < currentProfile.samples.length; i++) {
-                const s = currentProfile.samples[i];
-                const px = centerX - s.r * scaleX;
+            const samples = currentProfile.samples;
+            const numS = samples.length;
+
+            for (let i = 0; i < numS; i++) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                if (i === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
+                if (i === 0) {
+                    ctx.moveTo(centerX - s.r * scaleX, py);
+                } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true);
+                    i++;
+                } else {
+                    ctx.lineTo(centerX - s.r * scaleX, py);
+                }
             }
-            // Top Ellipse Arc (left to right)
+
             if (topR > 0.01) {
                 ctx.ellipse(centerX, topY, topRx, topRy, 0, Math.PI, 2 * Math.PI, false);
             }
-            // Right Wall (top to bottom)
-            for (let i = currentProfile.samples.length - 1; i >= 0; i--) {
-                const s = currentProfile.samples[i];
-                const px = centerX + s.r * scaleX;
+
+            for (let i = numS - 1; i >= 0; i--) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                ctx.lineTo(px, py);
+                if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false);
+                    i--;
+                } else {
+                    ctx.lineTo(centerX + s.r * scaleX, py);
+                }
             }
-            // Bottom Base Curve (right to left)
+
             if (bottomR > 0.01) {
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI, false);
             }
             ctx.closePath();
 
-            // Glass specular reflection highlight
             ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)';
             ctx.fill();
 
-            // 5. Stroke Outer Side Walls & Bottom Base (No top line across)
+            // Stroke Outer Side Walls
             ctx.beginPath();
-            // Left Wall (top to bottom)
-            for (let i = currentProfile.samples.length - 1; i >= 0; i--) {
-                const s = currentProfile.samples[i];
-                const px = centerX - s.r * scaleX;
+            for (let i = numS - 1; i >= 0; i--) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                if (i === currentProfile.samples.length - 1) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
+                if (i === numS - 1) {
+                    ctx.moveTo(centerX - s.r * scaleX, py);
+                } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true);
+                    i--;
+                } else {
+                    ctx.lineTo(centerX - s.r * scaleX, py);
+                }
             }
-            // Bottom Base Curve (left to right)
+
             if (bottomR > 0.01) {
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
             }
-            // Right Wall (bottom to top)
-            for (let i = 0; i < currentProfile.samples.length; i++) {
-                const s = currentProfile.samples[i];
-                const px = centerX + s.r * scaleX;
+
+            for (let i = 0; i < numS; i++) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                ctx.lineTo(px, py);
+                if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                    i++;
+                } else {
+                    ctx.lineTo(centerX + s.r * scaleX, py);
+                }
             }
 
             ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(30, 41, 59, 0.85)';
             ctx.lineWidth = 3.5;
             ctx.stroke();
 
-            // Glass Rim Line at Top (Full Ellipse)
+            // Stroke 3D Connection Ellipses at Cylinder Steps
+            currentProfile.steps.forEach(st => {
+                const py = bottomY - st.y * scaleY;
+                const rx1 = st.rBelow * scaleX;
+                const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
+                const rx2 = st.rAbove * scaleX;
+                const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
+
+                ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(30, 41, 59, 0.85)';
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                ctx.ellipse(centerX, py, rx1, ry1, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.ellipse(centerX, py, rx2, ry2, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Top Rim Ellipse
             ctx.beginPath();
             ctx.ellipse(centerX, topY, topRx, topRy, 0, 0, Math.PI * 2);
             ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)';
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Glass Base Ellipse Line at Bottom (Full Ellipse)
+            // Bottom Rim Ellipse
             if (bottomR > 0.01) {
                 ctx.beginPath();
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI * 2);
@@ -1324,35 +1449,12 @@
                 ctx.stroke();
             }
 
-            // Step Discontinuity Ellipses at Cylinder Junctions
-            if (currentProfile.steps && currentProfile.steps.length > 0) {
-                currentProfile.steps.forEach(step => {
-                    const stepY = bottomY - step.y * scaleY;
-                    const rx1 = Math.max(0.1, step.rBelow * scaleX);
-                    const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
-                    const rx2 = Math.max(0.1, step.rAbove * scaleX);
-                    const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
-
-                    ctx.beginPath();
-                    ctx.ellipse(centerX, stepY, rx1, ry1, 0, 0, Math.PI * 2);
-                    ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
-
-                    ctx.beginPath();
-                    ctx.ellipse(centerX, stepY, rx2, ry2, 0, 0, Math.PI * 2);
-                    ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
-                });
-            }
-
             ctx.restore();
         }
 
 
         /* -------------------------------------------------------------------------
-         * CANVAS RENDERER: DEPTH VS TIME GRAPH & DRAWN PREDICTION
+         * CANVAS RENDERER: DEPTH VS TIME GRAPH & PREDICTION
          * ------------------------------------------------------------------------- */
 
         function drawGraphCanvas() {
@@ -1376,13 +1478,12 @@
             const scaleX = graphW / T_max;
             const scaleY = graphH / H_max;
 
-            // 1. Draw Grid lines & Axes
+            // Grid Lines & Axes
             ctx.strokeStyle = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
             ctx.lineWidth = 1;
             ctx.fillStyle = isDarkMode ? '#94a3b8' : '#64748b';
             ctx.font = '10px Inter, sans-serif';
 
-            // Y Grid ticks (Depth h)
             for (let h = 0; h <= H_max; h += 5) {
                 const py = height - paddingB - h * scaleY;
                 ctx.beginPath();
@@ -1392,7 +1493,6 @@
                 ctx.fillText(h + ' cm', 8, py + 3);
             }
 
-            // X Grid ticks (Time t)
             const timeStep = Math.max(1, Math.ceil(T_max / 5));
             for (let t = 0; t <= T_max; t += timeStep) {
                 const px = paddingL + t * scaleX;
@@ -1403,7 +1503,6 @@
                 ctx.fillText(t + 's', px - 8, height - paddingB + 15);
             }
 
-            // Main Axis Box
             ctx.strokeStyle = isDarkMode ? '#475569' : '#cbd5e1';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -1412,13 +1511,11 @@
             ctx.lineTo(width - paddingR, height - paddingB);
             ctx.stroke();
 
-            // Axis Titles
             ctx.fillStyle = isDarkMode ? '#e2e8f0' : '#1e293b';
             ctx.font = 'bold 11px Inter, sans-serif';
             ctx.fillText('Depth h (cm)', paddingL - 5, paddingT - 10);
             ctx.fillText('Time t (s)', width - paddingR - 45, height - 10);
 
-            // 2. Draw Prompt Overlay if No Prediction is drawn yet & simulation hasn't started
             if (userPredictionPoints.length === 0 && simTime === 0) {
                 ctx.save();
                 ctx.fillStyle = isDarkMode ? 'rgba(168, 85, 247, 0.85)' : 'rgba(147, 51, 234, 0.85)';
@@ -1428,10 +1525,10 @@
                 ctx.restore();
             }
 
-            // 3. Draw User Drawn Prediction Line (Purple)
+            // Drawn Prediction Line (Purple)
             if (userPredictionPoints.length > 0) {
                 ctx.beginPath();
-                ctx.strokeStyle = '#a855f7'; // Purple prediction line
+                ctx.strokeStyle = '#a855f7';
                 ctx.lineWidth = 2.5;
 
                 for (let i = 0; i < userPredictionPoints.length; i++) {
@@ -1443,7 +1540,6 @@
                 }
                 ctx.stroke();
 
-                // Label Tag
                 ctx.fillStyle = '#a855f7';
                 ctx.font = 'bold 10px Inter, sans-serif';
                 const lastPt = userPredictionPoints[userPredictionPoints.length - 1];
@@ -1452,8 +1548,7 @@
                 ctx.fillText('Your Prediction', Math.max(paddingL + 5, tagX), Math.max(paddingT + 12, tagY));
             }
 
-            // 4. Draw Active Real-time Filled True Curve (Blue) progressive up to current simTime
-            // (Note: No dashed line shown before or during prediction! Revealed purely via water filling animation)
+            // Real-time Filled True Curve (Blue)
             const V_current = Math.min(currentProfile.totalVolume, flowRate * simTime);
             const h_current = currentProfile.getHeightAtVolume(V_current);
 
@@ -1478,7 +1573,7 @@
                 ctx.stroke();
             }
 
-            // 5. Tangent Line & Derivative at Current Point
+            // Tangent Line
             const curPx = paddingL + simTime * scaleX;
             const curPy = height - paddingB - h_current * scaleY;
 
@@ -1486,30 +1581,27 @@
             if (showTangent && simTime > 0) {
                 const r_cur = currentProfile.getRadiusAt(h_current);
                 const A_cur = Math.PI * r_cur * r_cur;
-                const dhdt = flowRate / A_cur; // slope in cm/s
+                const dhdt = flowRate / A_cur;
 
                 const m_canvas = -dhdt * (scaleY / scaleX);
-
-                const tangentLength = 60; // px line length each direction
+                const tangentLength = 60;
                 const dx = tangentLength / Math.sqrt(1 + m_canvas * m_canvas);
                 const dy = m_canvas * dx;
 
-                ctx.strokeStyle = '#f59e0b'; // Amber tangent line
+                ctx.strokeStyle = '#f59e0b';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(curPx - dx, curPy - dy);
                 ctx.lineTo(curPx + dx, curPy + dy);
                 ctx.stroke();
 
-                // Slope Value Badge Tag
                 ctx.fillStyle = '#f59e0b';
                 ctx.font = 'bold 10px Inter, sans-serif';
                 ctx.fillText(`dh/dt = ${dhdt.toFixed(2)} cm/s`, Math.min(width - 110, curPx + 10), Math.max(paddingT + 15, curPy - 10));
             }
 
-            // Current Time/Height Point Marker Dot
             if (simTime > 0) {
-                ctx.fillStyle = '#e11d48'; // Rose red dot
+                ctx.fillStyle = '#e11d48';
                 ctx.beginPath();
                 ctx.arc(curPx, curPy, 5.5, 0, Math.PI * 2);
                 ctx.fill();
@@ -1522,7 +1614,7 @@
         }
 
         /* -------------------------------------------------------------------------
-         * GRAPH PREDICTION DRAWING & SCORING MECHANICS (SEGMENTED DRAWING)
+         * GRAPH PREDICTION DRAWING & SCORING MECHANICS
          * ------------------------------------------------------------------------- */
 
         function setupGraphPredictionCanvas() {
@@ -1542,7 +1634,7 @@
             }
 
             function startPredict(e) {
-                if (isPlaying || simTime > 0) return; // don't allow drawing during or after simulation playback
+                if (isPlaying || simTime > 0) return;
                 isDrawingPrediction = true;
                 currentStrokePoints = [];
                 predictionScore = null;
@@ -1594,23 +1686,16 @@
         function updateCombinedPrediction(isFinal = false) {
             if (currentStrokePoints.length === 0) return;
 
-            // Find time range of the active stroke
             let tMin = Infinity, tMax = -Infinity;
             for (let p of currentStrokePoints) {
                 if (p.t < tMin) tMin = p.t;
                 if (p.t > tMax) tMax = p.t;
             }
 
-            // Remove existing points that overlap with the active stroke's time range
             const nonOverlapping = existingPredictionPoints.filter(p => p.t < tMin - 0.01 || p.t > tMax + 0.01);
-
-            // Merge non-overlapping points + new stroke points
             let combined = [...nonOverlapping, ...currentStrokePoints];
-
-            // Sort all points chronologically by time t
             combined.sort((a, b) => a.t - b.t);
 
-            // Deduplicate extremely close time points
             const filtered = [];
             for (let p of combined) {
                 if (filtered.length === 0 || p.t - filtered[filtered.length - 1].t > 0.02) {
@@ -1666,9 +1751,8 @@
             }
 
             const mae = totalError / (N + 1);
-            const normError = mae / H_max; // relative error 0..1
+            const normError = mae / H_max;
 
-            // Score out of 100
             let rawScore = Math.round(100 * (1 - 1.8 * normError));
             predictionScore = Math.max(0, Math.min(100, rawScore));
             updateScoreUI();
@@ -1709,7 +1793,7 @@
 
 
         /* -------------------------------------------------------------------------
-         * 5. CUSTOM CONTAINER BUILDER LOGIC (MODES A, B, C)
+         * 6. CUSTOM CONTAINER BUILDER LOGIC
          * ------------------------------------------------------------------------- */
 
         let builderMode = 'blocks';
@@ -1718,7 +1802,7 @@
             { type: 'cone', height: 10, rBottom: 4, rTop: 8 }
         ];
 
-        let freehandPoints = []; // [{x, y}] normalized
+        let freehandPoints = [];
         let isDrawingFreehand = false;
 
         function initBuilder() {
@@ -1743,7 +1827,6 @@
             drawBuilderPreview();
         }
 
-        // Mode A: Stacked Building Blocks
         function renderLayersList() {
             const container = document.getElementById('layers-list');
             container.innerHTML = '';
@@ -1808,7 +1891,6 @@
             drawBuilderPreview();
         }
 
-        // Mode B: Math Function $r(y)$ Parser
         function parseFunction(exprStr) {
             try {
                 let cleaned = exprStr
@@ -1817,7 +1899,7 @@
                     .replace(/\bpi\b/gi, 'Math.PI')
                     .replace(/\be\b/g, 'Math.E');
                 const fn = new Function('y', `return ${cleaned};`);
-                const test = fn(1); // test evaluation
+                const test = fn(1);
                 if (isNaN(test)) return null;
                 return fn;
             } catch (e) {
@@ -1845,7 +1927,6 @@
             previewFunction();
         }
 
-        // Mode C: Freehand Drawing
         function setupFreehandCanvas() {
             const canvas = document.getElementById('canvas-builder');
             if (!canvas) return;
@@ -1930,7 +2011,11 @@
         function getCustomProfileFromBuilder() {
             if (builderMode === 'blocks') {
                 let totalH = 0;
-                builderLayers.forEach(l => totalH += l.height);
+                let stepHeights = [];
+                builderLayers.forEach((l, idx) => {
+                    totalH += l.height;
+                    if (idx < builderLayers.length - 1) stepHeights.push(totalH);
+                });
                 
                 const radiusFunc = (y) => {
                     let accH = 0;
@@ -1944,15 +2029,15 @@
                     return builderLayers[builderLayers.length - 1].rTop;
                 };
 
-                return buildContainerProfile(radiusFunc, totalH);
+                return buildContainerProfile(radiusFunc, totalH, stepHeights);
             } else if (builderMode === 'func') {
                 const str = document.getElementById('func-input').value;
                 const hVal = parseFloat(document.getElementById('func-height').value);
                 const fn = parseFunction(str) || ((y) => 5);
-                return buildContainerProfile(fn, hVal);
+                return buildContainerProfile(fn, hVal, []);
             } else {
                 if (freehandPoints.length < 2) {
-                    return buildContainerProfile((y) => 4, 20); // fallback cylinder
+                    return buildContainerProfile((y) => 4, 20, []);
                 }
                 const H = 20;
                 const radiusFunc = (y) => {
@@ -1969,7 +2054,7 @@
                     }
                     return 4;
                 };
-                return buildContainerProfile(radiusFunc, H);
+                return buildContainerProfile(radiusFunc, H, []);
             }
         }
 
@@ -2002,7 +2087,7 @@
             const topRx = Math.max(0.1, topR * scaleX);
             const topRy = Math.max(0.1, Math.min(8, topRx * 0.2));
 
-            // Draw Central Symmetry Axis
+            // Central Symmetry Axis
             ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
             ctx.setLineDash([5, 5]);
             ctx.beginPath();
@@ -2013,26 +2098,37 @@
 
             // Fill Container Background
             ctx.beginPath();
-            // Left Wall (bottom to top)
-            for (let i = 0; i < tempProfile.samples.length; i++) {
-                const s = tempProfile.samples[i];
-                const px = centerX - s.r * scaleX;
+            const samples = tempProfile.samples;
+            const numS = samples.length;
+
+            for (let i = 0; i < numS; i++) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                if (i === 0) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
+                if (i === 0) {
+                    ctx.moveTo(centerX - s.r * scaleX, py);
+                } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true);
+                    i++;
+                } else {
+                    ctx.lineTo(centerX - s.r * scaleX, py);
+                }
             }
-            // Top Ellipse Arc (left to right)
+
             if (topR > 0.01) {
                 ctx.ellipse(centerX, topY, topRx, topRy, 0, Math.PI, 2 * Math.PI, false);
             }
-            // Right Wall (top to bottom)
-            for (let i = tempProfile.samples.length - 1; i >= 0; i--) {
-                const s = tempProfile.samples[i];
-                const px = centerX + s.r * scaleX;
+
+            for (let i = numS - 1; i >= 0; i--) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                ctx.lineTo(px, py);
+                if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false);
+                    i--;
+                } else {
+                    ctx.lineTo(centerX + s.r * scaleX, py);
+                }
             }
-            // Bottom Base Curve (right to left)
+
             if (bottomR > 0.01) {
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI, false);
             }
@@ -2046,69 +2142,74 @@
             ctx.fillStyle = profileGrad;
             ctx.fill();
 
-            // Stroke Outer Side Walls & Bottom Base (No top line across)
+            // Stroke Outer Side Walls
             ctx.beginPath();
-            // Left Wall (top to bottom)
-            for (let i = tempProfile.samples.length - 1; i >= 0; i--) {
-                const s = tempProfile.samples[i];
-                const px = centerX - s.r * scaleX;
+            for (let i = numS - 1; i >= 0; i--) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                if (i === tempProfile.samples.length - 1) ctx.moveTo(px, py);
-                else ctx.lineTo(px, py);
+                if (i === numS - 1) {
+                    ctx.moveTo(centerX - s.r * scaleX, py);
+                } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true);
+                    i--;
+                } else {
+                    ctx.lineTo(centerX - s.r * scaleX, py);
+                }
             }
-            // Bottom Base Curve (left to right)
+
             if (bottomR > 0.01) {
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
             }
-            // Right Wall (bottom to top)
-            for (let i = 0; i < tempProfile.samples.length; i++) {
-                const s = tempProfile.samples[i];
-                const px = centerX + s.r * scaleX;
+
+            for (let i = 0; i < numS; i++) {
+                const s = samples[i];
                 const py = bottomY - s.y * scaleY;
-                ctx.lineTo(px, py);
+                if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                    i++;
+                } else {
+                    ctx.lineTo(centerX + s.r * scaleX, py);
+                }
             }
 
             ctx.strokeStyle = '#0284c7';
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // Top rim line (Full Ellipse)
+            // Stroke 3D Step Connection Ellipses
+            tempProfile.steps.forEach(st => {
+                const py = bottomY - st.y * scaleY;
+                const rx1 = st.rBelow * scaleX;
+                const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
+                const rx2 = st.rAbove * scaleX;
+                const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
+
+                ctx.strokeStyle = '#0284c7';
+                ctx.lineWidth = 1.5;
+
+                ctx.beginPath();
+                ctx.ellipse(centerX, py, rx1, ry1, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.ellipse(centerX, py, rx2, ry2, 0, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Top rim ellipse
             ctx.beginPath();
             ctx.ellipse(centerX, topY, topRx, topRy, 0, 0, Math.PI * 2);
             ctx.strokeStyle = '#0284c7';
             ctx.lineWidth = 1.5;
             ctx.stroke();
 
-            // Bottom base ellipse line (Full Ellipse)
+            // Bottom base ellipse
             if (bottomR > 0.01) {
                 ctx.beginPath();
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI * 2);
                 ctx.strokeStyle = '#0284c7';
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
-            }
-
-            // Step Discontinuity Ellipses at Cylinder Junctions
-            if (tempProfile.steps && tempProfile.steps.length > 0) {
-                tempProfile.steps.forEach(step => {
-                    const stepY = bottomY - step.y * scaleY;
-                    const rx1 = Math.max(0.1, step.rBelow * scaleX);
-                    const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
-                    const rx2 = Math.max(0.1, step.rAbove * scaleX);
-                    const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
-
-                    ctx.beginPath();
-                    ctx.ellipse(centerX, stepY, rx1, ry1, 0, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#0284c7';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
-
-                    ctx.beginPath();
-                    ctx.ellipse(centerX, stepY, rx2, ry2, 0, 0, Math.PI * 2);
-                    ctx.strokeStyle = '#0284c7';
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
-                });
             }
 
             // Total Volume Badge overlay
@@ -2127,6 +2228,7 @@
             PRESETS.custom = {
                 name: 'Custom Container',
                 H: customProfile.H,
+                stepHeights: [],
                 radiusFunc: (y) => customProfile.getRadiusAt(y),
                 formulaTex: 'r(y) = \\text{Custom Defined}',
                 explanation: 'Custom built container geometry evaluated numerically using discrete volume disk integration.'
@@ -2144,18 +2246,18 @@
 
 
         /* -------------------------------------------------------------------------
-         * 6. GRAPH MATCHING GAME LOGIC
+         * 7. GRAPH MATCHING GAME LOGIC
          * ------------------------------------------------------------------------- */
 
-        let gameMode = 'faceup'; // 'faceup' or 'memory'
+        let gameMode = 'faceup';
         let gameScore = 0;
         let gameMatches = 0;
         let gameMoves = 0;
-        let gamePairsCount = 6;
+        let gamePairsCount = 8;
         let gameTimerInterval = null;
         let gameTimeSeconds = 0;
 
-        let gameCards = []; // [{id, type: 'container'|'graph', key, profile, flipped, matched}]
+        let gameCards = [];
         let selectedCards = [];
         let isProcessingMatch = false;
 
@@ -2183,13 +2285,18 @@
                 document.getElementById('gstat-time').innerText = `${mins}:${secs}`;
             }, 1000);
 
-            const availableKeys = ['cylinder', 'cone_bottom', 'cone_top', 'sphere', 'parabola', 'stacked_narrow_wide', 'stacked_wide_narrow', 'erlenmeyer', 'vase'];
+            const availableKeys = [
+                'cylinder', 'cone_bottom', 'cone_top', 'sphere', 'parabola',
+                'stacked_narrow_wide', 'stacked_wide_narrow', 'triple_stacked_step_up',
+                'triple_stacked_step_down', 'triple_stacked_hourglass', 'erlenmeyer', 'goblet', 'vase'
+            ];
             availableKeys.sort(() => Math.random() - 0.5);
             const chosenKeys = availableKeys.slice(0, gamePairsCount);
 
             gameCards = [];
             chosenKeys.forEach((key, idx) => {
-                const prof = buildContainerProfile(PRESETS[key].radiusFunc, PRESETS[key].H);
+                const preset = PRESETS[key];
+                const prof = buildContainerProfile(preset.radiusFunc, preset.H, preset.stepHeights);
                 
                 gameCards.push({
                     id: `c_${idx}`,
@@ -2294,28 +2401,39 @@
                 const topRx = Math.max(0.1, topR * scaleX);
                 const topRy = Math.max(0.1, Math.min(8, topRx * 0.2));
 
+                const samples = card.profile.samples;
+                const numS = samples.length;
+
                 // Fill Container Background
                 ctx.beginPath();
-                // Left Wall (bottom to top)
-                for (let i = 0; i < card.profile.samples.length; i++) {
-                    const s = card.profile.samples[i];
-                    const px = centerX - s.r * scaleX;
+                for (let i = 0; i < numS; i++) {
+                    const s = samples[i];
                     const py = bottomY - s.y * scaleY;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    if (i === 0) {
+                        ctx.moveTo(centerX - s.r * scaleX, py);
+                    } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true);
+                        i++;
+                    } else {
+                        ctx.lineTo(centerX - s.r * scaleX, py);
+                    }
                 }
-                // Top Ellipse Arc (left to right)
+
                 if (topR > 0.01) {
                     ctx.ellipse(centerX, topY, topRx, topRy, 0, Math.PI, 2 * Math.PI, false);
                 }
-                // Right Wall (top to bottom)
-                for (let i = card.profile.samples.length - 1; i >= 0; i--) {
-                    const s = card.profile.samples[i];
-                    const px = centerX + s.r * scaleX;
+
+                for (let i = numS - 1; i >= 0; i--) {
+                    const s = samples[i];
                     const py = bottomY - s.y * scaleY;
-                    ctx.lineTo(px, py);
+                    if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false);
+                        i--;
+                    } else {
+                        ctx.lineTo(centerX + s.r * scaleX, py);
+                    }
                 }
-                // Bottom Base Curve (right to left)
+
                 if (bottomR > 0.01) {
                     ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI, false);
                 }
@@ -2324,40 +2442,68 @@
                 ctx.fillStyle = isDarkMode ? 'rgba(56, 189, 248, 0.25)' : 'rgba(2, 132, 199, 0.15)';
                 ctx.fill();
 
-                // Stroke Outer Side Walls & Bottom Base (No top line across)
+                // Stroke Outer Side Walls
                 ctx.beginPath();
-                // Left Wall (top to bottom)
-                for (let i = card.profile.samples.length - 1; i >= 0; i--) {
-                    const s = card.profile.samples[i];
-                    const px = centerX - s.r * scaleX;
+                for (let i = numS - 1; i >= 0; i--) {
+                    const s = samples[i];
                     const py = bottomY - s.y * scaleY;
-                    if (i === card.profile.samples.length - 1) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    if (i === numS - 1) {
+                        ctx.moveTo(centerX - s.r * scaleX, py);
+                    } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true);
+                        i--;
+                    } else {
+                        ctx.lineTo(centerX - s.r * scaleX, py);
+                    }
                 }
-                // Bottom Base Curve (left to right)
+
                 if (bottomR > 0.01) {
                     ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
                 }
-                // Right Wall (bottom to top)
-                for (let i = 0; i < card.profile.samples.length; i++) {
-                    const s = card.profile.samples[i];
-                    const px = centerX + s.r * scaleX;
+
+                for (let i = 0; i < numS; i++) {
+                    const s = samples[i];
                     const py = bottomY - s.y * scaleY;
-                    ctx.lineTo(px, py);
+                    if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                        i++;
+                    } else {
+                        ctx.lineTo(centerX + s.r * scaleX, py);
+                    }
                 }
 
                 ctx.strokeStyle = '#0284c7';
                 ctx.lineWidth = 2.5;
                 ctx.stroke();
 
-                // Top rim line (Full Ellipse)
+                // Stroke 3D Connection Ellipses at Steps
+                card.profile.steps.forEach(st => {
+                    const py = bottomY - st.y * scaleY;
+                    const rx1 = st.rBelow * scaleX;
+                    const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
+                    const rx2 = st.rAbove * scaleX;
+                    const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
+
+                    ctx.strokeStyle = '#0284c7';
+                    ctx.lineWidth = 1.5;
+
+                    ctx.beginPath();
+                    ctx.ellipse(centerX, py, rx1, ry1, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.ellipse(centerX, py, rx2, ry2, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                });
+
+                // Top rim ellipse
                 ctx.beginPath();
                 ctx.ellipse(centerX, topY, topRx, topRy, 0, 0, Math.PI * 2);
                 ctx.strokeStyle = '#0284c7';
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
 
-                // Bottom base line (Full Ellipse)
+                // Bottom base ellipse
                 if (bottomR > 0.01) {
                     ctx.beginPath();
                     ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI * 2);
@@ -2365,31 +2511,8 @@
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
                 }
-
-                // Step Discontinuity Ellipses at Cylinder Junctions
-                if (card.profile.steps && card.profile.steps.length > 0) {
-                    card.profile.steps.forEach(step => {
-                        const stepY = bottomY - step.y * scaleY;
-                        const rx1 = Math.max(0.1, step.rBelow * scaleX);
-                        const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
-                        const rx2 = Math.max(0.1, step.rAbove * scaleX);
-                        const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
-
-                        ctx.beginPath();
-                        ctx.ellipse(centerX, stepY, rx1, ry1, 0, 0, Math.PI * 2);
-                        ctx.strokeStyle = '#0284c7';
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-
-                        ctx.beginPath();
-                        ctx.ellipse(centerX, stepY, rx2, ry2, 0, 0, Math.PI * 2);
-                        ctx.strokeStyle = '#0284c7';
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-                    });
-                }
             } else {
-                // Render Depth-Time Graph Curve
+                // Depth-Time Graph Curve
                 const padding = 15;
                 const Q = 50;
                 const T_max = card.profile.totalVolume / Q;
@@ -2439,7 +2562,7 @@
                 setTimeout(() => {
                     checkCardMatch();
                     isProcessingMatch = false;
-                }, 1000); // 1 second highlight pause
+                }, 1000);
             }
         }
 
@@ -2449,7 +2572,6 @@
             const c2 = gameCards[idx2];
 
             if (c1.key === c2.key && c1.type !== c2.type) {
-                // MATCH SUCCESS
                 c1.matched = true;
                 c2.matched = true;
                 gameScore += 100;
@@ -2461,10 +2583,9 @@
 
                 if (gameMatches === gamePairsCount) {
                     if (gameTimerInterval) clearInterval(gameTimerInterval);
-                    setTimeout(showWinModal, 400); // Trigger celebration popup
+                    setTimeout(showWinModal, 400);
                 }
             } else {
-                // MATCH FAILED
                 if (gameMode === 'memory') {
                     c1.flipped = false;
                     c2.flipped = false;
@@ -2490,7 +2611,7 @@
 
 
         /* -------------------------------------------------------------------------
-         * 7. MATHS BACKGROUND UI UPDATES & EXPORT TOOLS
+         * 8. MATHS BACKGROUND UI UPDATES & EXPORT TOOLS
          * ------------------------------------------------------------------------- */
 
         function updateMathsBackgroundUI() {
@@ -2538,8 +2659,6 @@
             }
         }
 
-
-        /* Export Tools: PNG Canvas Download & CSV Data */
         function exportPNG(target) {
             const canvasId = target === 'container' ? 'canvas-container' : 'canvas-graph';
             const canvas = document.getElementById(canvasId);
