@@ -960,12 +960,31 @@
          * 3. 3D ELLIPSE ARC HELPER FOR CYLINDER CONNECTIONS
          * ------------------------------------------------------------------------- */
 
-        function drawStepShelfArc(ctx, centerX, py, rFrom, rTo, scaleX, isLeftSide, isStroke = false) {
-            const targetX = centerX + (isLeftSide ? -rTo * scaleX : rTo * scaleX);
-            if (isStroke) {
-                ctx.moveTo(targetX, py);
-            } else {
-                ctx.lineTo(targetX, py);
+        function drawStepShelfArc(ctx, centerX, py, rFrom, rTo, scaleX, isLeftSide, isStroke = false, upperIsWide = false) {
+            const sx = isLeftSide ? -1 : 1;
+
+            const wide = Math.max(rFrom, rTo);
+            if (wide <= 0.01 || Math.abs(rFrom - rTo) < 1e-9) {
+                ctx.lineTo(centerX + sx * rFrom * scaleX, py);
+                ctx.lineTo(centerX + sx * rTo * scaleX, py);
+                return;
+            }
+
+            // Follow the rim of the WIDER cylinder (a 3D ellipse) from its outer edge
+            // to the point where it meets the narrower cylinder's wall.
+            // - Wide cylinder above the step: its base edge curves toward the viewer (down).
+            // - Wide cylinder below the step: its top rim curves away from the viewer (up).
+            const wideRx = wide * scaleX;
+            const wideRy = Math.max(0.1, wideRx * 0.2);
+            const sy = upperIsWide ? 1 : -1;
+            const phiFrom = Math.acos(Math.min(1, rFrom / wide));
+            const phiTo = Math.acos(Math.min(1, rTo / wide));
+            // Start exactly on the arc (k = 0) so the wall joins it with no spike when the
+            // path begins at the narrow cylinder's wall, where the arc is above/below step level.
+            const N = 24;
+            for (let k = 0; k <= N; k++) {
+                const phi = phiFrom + (phiTo - phiFrom) * (k / N);
+                ctx.lineTo(centerX + sx * wideRx * Math.cos(phi), py + sy * wideRy * Math.sin(phi));
             }
         }
 
@@ -1270,7 +1289,7 @@
                 if (i === 0) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false, s.rAbove > s.rBelow);
                     i++;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -1285,7 +1304,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false, s.rAbove > s.rBelow);
                     i--;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -1306,22 +1325,35 @@
                 const surfaceRx = Math.max(0.1, surfaceR * scaleX);
                 const surfaceRy = Math.max(0.1, surfaceRx * 0.2);
 
-                ctx.beginPath();
-                let maxIndex = 0;
+                // Find the last sample strictly below (or at) the surface
+                let maxIndex = -1;
                 for (let i = 0; i < numS; i++) {
-                    if (samples[i].y <= h_current) maxIndex = i;
-                    else break;
+                    const s = samples[i];
+                    if (s.y < h_current - 1e-6) {
+                        maxIndex = i;
+                    } else if (Math.abs(s.y - h_current) <= 1e-6) {
+                        maxIndex = i;
+                        // If this is the first of a step pair, we want to include the upper pair as well so the shelf is drawn
+                        if (i + 1 < numS && Math.abs(samples[i + 1].y - s.y) < 1e-6) {
+                            maxIndex = i + 1;
+                        }
+                        break;
+                    } else {
+                        break;
+                    }
                 }
 
-                // Top left surface start point
+                ctx.beginPath();
+                // Start at top-left of water surface
                 ctx.moveTo(centerX - surfaceRx, liquidY);
 
-                // Trace left water boundary down
+                // Trace LEFT boundary downward
                 for (let i = maxIndex; i >= 0; i--) {
                     const s = samples[i];
                     const py = bottomY - s.y * scaleY;
-                    if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, samples[i-1].r, s.r, scaleX, true, false);
+                    if (i > 0 && samples[i - 1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i - 1].r, scaleX, true, false, s.rAbove > s.rBelow);
+                        i--;
                     } else {
                         ctx.lineTo(centerX - s.r * scaleX, py);
                     }
@@ -1332,22 +1364,22 @@
                     ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
                 }
 
-                // Trace right water boundary up
+                // Trace RIGHT boundary upward
                 for (let i = 0; i <= maxIndex; i++) {
                     const s = samples[i];
                     const py = bottomY - s.y * scaleY;
-                    if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, false);
+                    if (i < maxIndex && samples[i + 1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i + 1].r, scaleX, false, false, s.rAbove > s.rBelow);
                         i++;
                     } else {
                         ctx.lineTo(centerX + s.r * scaleX, py);
                     }
                 }
 
-                // Connect to top right surface point
+                // Connect across the top to the right surface point
                 ctx.lineTo(centerX + surfaceRx, liquidY);
 
-                // Top surface arc cap (3D top arc)
+                // Top surface arc cap (back half of ellipse going left)
                 ctx.ellipse(centerX, liquidY, surfaceRx, surfaceRy, 0, 0, Math.PI, true);
 
                 ctx.closePath();
@@ -1358,7 +1390,7 @@
                 ctx.fillStyle = waterGrad;
                 ctx.fill();
 
-                // Surface Cap Ellipse Overlay
+                // Surface cap highlight
                 ctx.beginPath();
                 ctx.ellipse(centerX, liquidY, surfaceRx, surfaceRy, 0, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(186, 230, 253, 0.75)';
@@ -1376,7 +1408,7 @@
                 if (i === numS - 1) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true, s.rAbove > s.rBelow);
                     i--;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -1391,7 +1423,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true, s.rAbove > s.rBelow);
                     i++;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2100,7 +2132,7 @@
                 if (i === 0) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false, s.rAbove > s.rBelow);
                     i++;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2115,7 +2147,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false, s.rAbove > s.rBelow);
                     i--;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2143,7 +2175,7 @@
                 if (i === numS - 1) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true, s.rAbove > s.rBelow);
                     i--;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2158,7 +2190,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true, s.rAbove > s.rBelow);
                     i++;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2405,7 +2437,7 @@
                     if (i === 0) {
                         ctx.moveTo(centerX - s.r * scaleX, py);
                     } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false, s.rAbove > s.rBelow);
                         i++;
                     } else {
                         ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2420,7 +2452,7 @@
                     const s = samples[i];
                     const py = bottomY - s.y * scaleY;
                     if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false, s.rAbove > s.rBelow);
                         i--;
                     } else {
                         ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2443,7 +2475,7 @@
                     if (i === numS - 1) {
                         ctx.moveTo(centerX - s.r * scaleX, py);
                     } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true, s.rAbove > s.rBelow);
                         i--;
                     } else {
                         ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2458,7 +2490,7 @@
                     const s = samples[i];
                     const py = bottomY - s.y * scaleY;
                     if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true, s.rAbove > s.rBelow);
                         i++;
                     } else {
                         ctx.lineTo(centerX + s.r * scaleX, py);
