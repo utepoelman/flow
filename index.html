@@ -960,30 +960,12 @@
          * 3. 3D ELLIPSE ARC HELPER FOR CYLINDER CONNECTIONS
          * ------------------------------------------------------------------------- */
 
-        function drawStepShelfArc(ctx, centerX, py, rFrom, rTo, scaleX, isLeftSide) {
-            const rMax = Math.max(rFrom, rTo);
-            const rxMax = rMax * scaleX;
-            const ryMax = Math.max(0.1, Math.min(8, rxMax * 0.2));
-
-            if (rxMax < 0.5 || Math.abs(rFrom - rTo) < 0.05) {
-                const targetX = centerX + (isLeftSide ? -rTo * scaleX : rTo * scaleX);
-                ctx.lineTo(targetX, py);
-                return;
-            }
-
-            const cos1 = Math.min(1.0, Math.max(-1.0, rFrom / rMax));
-            const cos2 = Math.min(1.0, Math.max(-1.0, rTo / rMax));
-            
-            if (isLeftSide) {
-                const a1 = Math.PI - Math.acos(cos1);
-                const a2 = Math.PI - Math.acos(cos2);
-                const ccw = (a1 > a2);
-                ctx.ellipse(centerX, py, rxMax, ryMax, 0, a1, a2, ccw);
+        function drawStepShelfArc(ctx, centerX, py, rFrom, rTo, scaleX, isLeftSide, isStroke = false) {
+            const targetX = centerX + (isLeftSide ? -rTo * scaleX : rTo * scaleX);
+            if (isStroke) {
+                ctx.moveTo(targetX, py);
             } else {
-                const a1 = Math.acos(cos1);
-                const a2 = Math.acos(cos2);
-                const ccw = (a1 > a2);
-                ctx.ellipse(centerX, py, rxMax, ryMax, 0, a1, a2, ccw);
+                ctx.lineTo(targetX, py);
             }
         }
 
@@ -1231,11 +1213,11 @@
 
             const bottomR = currentProfile.getRadiusAt(0);
             const bottomRx = Math.max(0.1, bottomR * scaleX);
-            const bottomRy = Math.max(0.1, Math.min(8, bottomRx * 0.2));
+            const bottomRy = Math.max(0.1, bottomRx * 0.2);
 
             const topR = currentProfile.getRadiusAt(H_container);
             const topRx = Math.max(0.1, topR * scaleX);
-            const topRy = Math.max(0.1, Math.min(8, topRx * 0.2));
+            const topRy = Math.max(0.1, topRx * 0.2);
 
             // Ruler Grid Lines
             ctx.strokeStyle = isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
@@ -1277,67 +1259,6 @@
                 ctx.fill();
             }
 
-            // Water Liquid Fill Inside Container
-            if (h_current > 0.01) {
-                ctx.beginPath();
-                const samples = currentProfile.samples;
-                const numS = samples.length;
-                let maxIndex = 0;
-                for (let i = 0; i < numS; i++) {
-                    if (samples[i].y <= h_current) maxIndex = i;
-                    else break;
-                }
-
-                // Trace left water boundary
-                for (let i = maxIndex; i >= 0; i--) {
-                    const s = samples[i];
-                    const py = bottomY - s.y * scaleY;
-                    if (i === maxIndex) {
-                        ctx.moveTo(centerX - s.r * scaleX, py);
-                    } else {
-                        if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                            drawStepShelfArc(ctx, centerX, py, samples[i-1].r, s.r, scaleX, true);
-                        } else {
-                            ctx.lineTo(centerX - s.r * scaleX, py);
-                        }
-                    }
-                }
-
-                if (bottomR > 0.01) {
-                    ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
-                }
-
-                // Trace right water boundary
-                for (let i = 0; i <= maxIndex; i++) {
-                    const s = samples[i];
-                    const py = bottomY - s.y * scaleY;
-                    if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
-                        i++;
-                    } else {
-                        ctx.lineTo(centerX + s.r * scaleX, py);
-                    }
-                }
-
-                ctx.closePath();
-
-                const waterGrad = ctx.createLinearGradient(centerX, bottomY, centerX, Math.min(bottomY - 1, liquidY));
-                waterGrad.addColorStop(0, 'rgba(2, 132, 199, 0.85)');
-                waterGrad.addColorStop(1, 'rgba(56, 189, 248, 0.65)');
-                ctx.fillStyle = waterGrad;
-                ctx.fill();
-
-                // Surface Ripple
-                const surfaceR = currentProfile.getRadiusAt(h_current);
-                const rx = Math.max(0.1, surfaceR * scaleX);
-                const ry = Math.max(0.1, Math.min(8, rx * 0.2));
-
-                ctx.beginPath();
-                ctx.ellipse(centerX, liquidY, rx, ry, 0, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(186, 230, 253, 0.8)';
-                ctx.fill();
-            }
-
             // Glass Fill Background
             ctx.beginPath();
             const samples = currentProfile.samples;
@@ -1349,7 +1270,7 @@
                 if (i === 0) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false);
                     i++;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -1364,7 +1285,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false);
                     i--;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -1379,6 +1300,74 @@
             ctx.fillStyle = isDarkMode ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)';
             ctx.fill();
 
+            // Water Liquid Fill Inside Container
+            if (h_current > 0.01) {
+                const surfaceR = currentProfile.getRadiusAt(h_current);
+                const surfaceRx = Math.max(0.1, surfaceR * scaleX);
+                const surfaceRy = Math.max(0.1, surfaceRx * 0.2);
+
+                ctx.beginPath();
+                let maxIndex = 0;
+                for (let i = 0; i < numS; i++) {
+                    if (samples[i].y <= h_current) maxIndex = i;
+                    else break;
+                }
+
+                // Top left surface start point
+                ctx.moveTo(centerX - surfaceRx, liquidY);
+
+                // Trace left water boundary down
+                for (let i = maxIndex; i >= 0; i--) {
+                    const s = samples[i];
+                    const py = bottomY - s.y * scaleY;
+                    if (s.isStep && i > 0 && samples[i-1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, samples[i-1].r, s.r, scaleX, true, false);
+                    } else {
+                        ctx.lineTo(centerX - s.r * scaleX, py);
+                    }
+                }
+
+                // Bottom base front arc
+                if (bottomR > 0.01) {
+                    ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, Math.PI, 0, true);
+                }
+
+                // Trace right water boundary up
+                for (let i = 0; i <= maxIndex; i++) {
+                    const s = samples[i];
+                    const py = bottomY - s.y * scaleY;
+                    if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, false);
+                        i++;
+                    } else {
+                        ctx.lineTo(centerX + s.r * scaleX, py);
+                    }
+                }
+
+                // Connect to top right surface point
+                ctx.lineTo(centerX + surfaceRx, liquidY);
+
+                // Top surface arc cap (3D top arc)
+                ctx.ellipse(centerX, liquidY, surfaceRx, surfaceRy, 0, 0, Math.PI, true);
+
+                ctx.closePath();
+
+                const waterGrad = ctx.createLinearGradient(centerX, bottomY, centerX, Math.min(bottomY - 1, liquidY));
+                waterGrad.addColorStop(0, 'rgba(2, 132, 199, 0.85)');
+                waterGrad.addColorStop(1, 'rgba(56, 189, 248, 0.65)');
+                ctx.fillStyle = waterGrad;
+                ctx.fill();
+
+                // Surface Cap Ellipse Overlay
+                ctx.beginPath();
+                ctx.ellipse(centerX, liquidY, surfaceRx, surfaceRy, 0, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(186, 230, 253, 0.75)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(186, 230, 253, 0.9)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+
             // Stroke Outer Side Walls
             ctx.beginPath();
             for (let i = numS - 1; i >= 0; i--) {
@@ -1387,7 +1376,7 @@
                 if (i === numS - 1) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true);
                     i--;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -1402,7 +1391,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true);
                     i++;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -1417,12 +1406,15 @@
             currentProfile.steps.forEach(st => {
                 const py = bottomY - st.y * scaleY;
                 const rx1 = st.rBelow * scaleX;
-                const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
+                const ry1 = Math.max(0.1, rx1 * 0.2);
                 const rx2 = st.rAbove * scaleX;
-                const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
+                const ry2 = Math.max(0.1, rx2 * 0.2);
 
-                ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.85)' : 'rgba(30, 41, 59, 0.85)';
-                ctx.lineWidth = 2;
+                const isSubmerged = st.y < h_current;
+                const stepAlpha = isSubmerged ? 0.25 : 0.85;
+
+                ctx.strokeStyle = isDarkMode ? `rgba(255, 255, 255, ${stepAlpha})` : `rgba(30, 41, 59, ${stepAlpha})`;
+                ctx.lineWidth = isSubmerged ? 1.5 : 2;
 
                 ctx.beginPath();
                 ctx.ellipse(centerX, py, rx1, ry1, 0, 0, Math.PI * 2);
@@ -1442,9 +1434,10 @@
 
             // Bottom Rim Ellipse
             if (bottomR > 0.01) {
+                const bottomAlpha = (h_current > 0.01) ? 0.35 : 0.9;
                 ctx.beginPath();
                 ctx.ellipse(centerX, bottomY, bottomRx, bottomRy, 0, 0, Math.PI * 2);
-                ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.9)' : 'rgba(30, 41, 59, 0.9)';
+                ctx.strokeStyle = isDarkMode ? `rgba(255, 255, 255, ${bottomAlpha})` : `rgba(30, 41, 59, ${bottomAlpha})`;
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }
@@ -2081,11 +2074,11 @@
 
             const bottomR = tempProfile.getRadiusAt(0);
             const bottomRx = Math.max(0.1, bottomR * scaleX);
-            const bottomRy = Math.max(0.1, Math.min(8, bottomRx * 0.2));
+            const bottomRy = Math.max(0.1, bottomRx * 0.2);
 
             const topR = tempProfile.getRadiusAt(H);
             const topRx = Math.max(0.1, topR * scaleX);
-            const topRy = Math.max(0.1, Math.min(8, topRx * 0.2));
+            const topRy = Math.max(0.1, topRx * 0.2);
 
             // Central Symmetry Axis
             ctx.strokeStyle = isDarkMode ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
@@ -2107,7 +2100,7 @@
                 if (i === 0) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false);
                     i++;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2122,7 +2115,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false);
                     i--;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2150,7 +2143,7 @@
                 if (i === numS - 1) {
                     ctx.moveTo(centerX - s.r * scaleX, py);
                 } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true);
                     i--;
                 } else {
                     ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2165,7 +2158,7 @@
                 const s = samples[i];
                 const py = bottomY - s.y * scaleY;
                 if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                    drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true);
                     i++;
                 } else {
                     ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2180,9 +2173,9 @@
             tempProfile.steps.forEach(st => {
                 const py = bottomY - st.y * scaleY;
                 const rx1 = st.rBelow * scaleX;
-                const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
+                const ry1 = Math.max(0.1, rx1 * 0.2);
                 const rx2 = st.rAbove * scaleX;
-                const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
+                const ry2 = Math.max(0.1, rx2 * 0.2);
 
                 ctx.strokeStyle = '#0284c7';
                 ctx.lineWidth = 1.5;
@@ -2395,11 +2388,11 @@
 
                 const bottomR = card.profile.getRadiusAt(0);
                 const bottomRx = Math.max(0.1, bottomR * scaleX);
-                const bottomRy = Math.max(0.1, Math.min(8, bottomRx * 0.2));
+                const bottomRy = Math.max(0.1, bottomRx * 0.2);
 
                 const topR = card.profile.getRadiusAt(H);
                 const topRx = Math.max(0.1, topR * scaleX);
-                const topRy = Math.max(0.1, Math.min(8, topRx * 0.2));
+                const topRy = Math.max(0.1, topRx * 0.2);
 
                 const samples = card.profile.samples;
                 const numS = samples.length;
@@ -2412,7 +2405,7 @@
                     if (i === 0) {
                         ctx.moveTo(centerX - s.r * scaleX, py);
                     } else if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, true, false);
                         i++;
                     } else {
                         ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2427,7 +2420,7 @@
                     const s = samples[i];
                     const py = bottomY - s.y * scaleY;
                     if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, false, false);
                         i--;
                     } else {
                         ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2450,7 +2443,7 @@
                     if (i === numS - 1) {
                         ctx.moveTo(centerX - s.r * scaleX, py);
                     } else if (s.isStep && i > 0 && samples[i-1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i-1].r, scaleX, true, true);
                         i--;
                     } else {
                         ctx.lineTo(centerX - s.r * scaleX, py);
@@ -2465,7 +2458,7 @@
                     const s = samples[i];
                     const py = bottomY - s.y * scaleY;
                     if (s.isStep && i < numS - 1 && samples[i+1].y === s.y) {
-                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false);
+                        drawStepShelfArc(ctx, centerX, py, s.r, samples[i+1].r, scaleX, false, true);
                         i++;
                     } else {
                         ctx.lineTo(centerX + s.r * scaleX, py);
@@ -2480,9 +2473,9 @@
                 card.profile.steps.forEach(st => {
                     const py = bottomY - st.y * scaleY;
                     const rx1 = st.rBelow * scaleX;
-                    const ry1 = Math.max(0.1, Math.min(8, rx1 * 0.2));
+                    const ry1 = Math.max(0.1, rx1 * 0.2);
                     const rx2 = st.rAbove * scaleX;
-                    const ry2 = Math.max(0.1, Math.min(8, rx2 * 0.2));
+                    const ry2 = Math.max(0.1, rx2 * 0.2);
 
                     ctx.strokeStyle = '#0284c7';
                     ctx.lineWidth = 1.5;
