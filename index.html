@@ -32,6 +32,13 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
 
     <style>
+        /* Lock touch scrolling/zooming while interacting with drawing canvases */
+        #canvas-graph, #canvas-builder {
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body {
             font-family: 'Inter', sans-serif;
@@ -1685,9 +1692,11 @@
             canvas.addEventListener('mousemove', movePredict);
             window.addEventListener('mouseup', endPredict);
 
-            canvas.addEventListener('touchstart', startPredict);
-            canvas.addEventListener('touchmove', movePredict);
+            // Non-passive so preventDefault() can stop the page from scrolling while drawing
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPredict(e); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); movePredict(e); }, { passive: false });
             window.addEventListener('touchend', endPredict);
+            window.addEventListener('touchcancel', endPredict);
         }
 
         function addStrokePoint(pos) {
@@ -2006,9 +2015,11 @@
             canvas.addEventListener('mousemove', moveDraw);
             window.addEventListener('mouseup', endDraw);
 
-            canvas.addEventListener('touchstart', startDraw);
-            canvas.addEventListener('touchmove', moveDraw);
+            // Non-passive so preventDefault() can stop the page from scrolling while drawing
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); moveDraw(e); }, { passive: false });
             window.addEventListener('touchend', endDraw);
+            window.addEventListener('touchcancel', endDraw);
         }
 
         function clearFreehandDraw() {
